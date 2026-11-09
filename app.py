@@ -4,16 +4,22 @@ import pandas as pd
 import joblib
 import plotly.express as px
 import plotly.graph_objects as go
+import os
 
-# ---------------- PAGE CONFIG ----------------
+# ==================================================
+# PAGE CONFIGURATION
+# ==================================================
 
 st.set_page_config(
     page_title="Credit Card Fraud Analytics",
     page_icon="💳",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-# ---------------- PROFESSIONAL DESIGN ----------------
+# ==================================================
+# PROFESSIONAL DESIGN
+# ==================================================
 
 st.markdown("""
 <style>
@@ -64,19 +70,13 @@ div[data-testid="stSidebar"] * {
     background-color: #1D4ED8;
     color: white;
 }
-hr {
-    border-color: #E2E8F0;
-}
 </style>
 """, unsafe_allow_html=True)
 
 
-# ---------------- LOAD DATA AND MODEL ----------------
-
-@st.cache_data
-def load_data():
-    return pd.read_csv("data/creditcard.csv")
-
+# ==================================================
+# LOAD TRAINED MODEL
+# ==================================================
 
 @st.cache_resource
 def load_model():
@@ -84,23 +84,58 @@ def load_model():
 
 
 try:
-    df = load_data()
     artifacts = load_model()
 
     model = artifacts["model"]
-    threshold = artifacts["threshold"]
-    features = artifacts["feature_names"]
+    threshold = float(artifacts["threshold"])
+    features = list(artifacts["feature_names"])
 
 except Exception as e:
-    st.error(f"Loading error: {e}")
+    st.error(f"Unable to load trained model: {e}")
+    st.info(
+        "Please check whether "
+        "models/fraud_detection_model.pkl exists."
+    )
     st.stop()
 
 
-# ---------------- SIDEBAR ----------------
+# ==================================================
+# OPTIONAL DATASET
+# ==================================================
+
+@st.cache_data
+def load_local_data():
+    return pd.read_csv("data/creditcard.csv")
+
+
+df = None
+
+if os.path.exists("data/creditcard.csv"):
+    try:
+        df = load_local_data()
+    except Exception:
+        df = None
+
+
+# ==================================================
+# CONSTANT DATASET STATISTICS
+# ==================================================
+
+TOTAL_TRANSACTIONS = 284807
+NORMAL_TRANSACTIONS = 284315
+FRAUD_TRANSACTIONS = 492
+
+FRAUD_RATE = (
+    FRAUD_TRANSACTIONS / TOTAL_TRANSACTIONS
+) * 100
+
+
+# ==================================================
+# SIDEBAR NAVIGATION
+# ==================================================
 
 st.sidebar.title("💳 Fraud Analytics")
-st.sidebar.caption("Machine Learning System")
-st.sidebar.divider()
+st.sidebar.markdown("---")
 
 page = st.sidebar.radio(
     "NAVIGATION",
@@ -112,149 +147,217 @@ page = st.sidebar.radio(
     ]
 )
 
-st.sidebar.divider()
-st.sidebar.info("Model: Random Forest Classifier")
-st.sidebar.caption("Prediction Threshold: 0.30")
+st.sidebar.markdown("---")
 
+st.sidebar.info(
+    "Credit Card Fraud Detection\n\n"
+    "Machine Learning Project\n\n"
+    "Model: Random Forest"
+)
 
-# ---------------- CHART THEME ----------------
-
-chart_layout = {
-    "template": "plotly_white",
-    "paper_bgcolor": "white",
-    "plot_bgcolor": "white",
-    "font": {"color": "#172033"},
-    "margin": dict(l=30, r=30, t=60, b=30)
-}
+st.sidebar.markdown(
+    "Developed using Python and Streamlit"
+)
 
 
 # ==================================================
-# DASHBOARD
+# DASHBOARD PAGE
 # ==================================================
 
 if page == "Dashboard":
 
     st.title("Credit Card Fraud Detection")
-    st.caption("Transaction Monitoring & Analytics Dashboard")
+    st.markdown(
+        "### Machine Learning Analytics Dashboard"
+    )
 
-    st.divider()
+    st.write(
+        "Monitor transaction patterns and explore "
+        "fraud detection model performance."
+    )
 
-    total = len(df)
-    fraud = int(df["Class"].sum())
-    normal = total - fraud
-    fraud_rate = fraud / total * 100
+    st.markdown("---")
 
     # KPI CARDS
 
-    st.subheader("Transaction Overview")
+    col1, col2, col3, col4 = st.columns(4)
 
-    c1, c2, c3, c4 = st.columns(4)
+    col1.metric(
+        "Total Transactions",
+        f"{TOTAL_TRANSACTIONS:,}"
+    )
 
-    c1.metric("Total Transactions", f"{total:,}")
-    c2.metric("Normal Transactions", f"{normal:,}")
-    c3.metric("Fraud Transactions", f"{fraud:,}")
-    c4.metric("Fraud Rate", f"{fraud_rate:.3f}%")
+    col2.metric(
+        "Normal Transactions",
+        f"{NORMAL_TRANSACTIONS:,}"
+    )
 
-    st.divider()
+    col3.metric(
+        "Fraud Transactions",
+        f"{FRAUD_TRANSACTIONS:,}"
+    )
 
-    # TRANSACTION CHARTS
+    col4.metric(
+        "Fraud Percentage",
+        f"{FRAUD_RATE:.2f}%"
+    )
 
-    st.subheader("Transaction Analytics")
+    st.markdown("---")
 
-    left, right = st.columns(2)
+    st.subheader("Transaction Distribution")
 
-    with left:
+    col1, col2 = st.columns(2)
 
-        class_data = pd.DataFrame({
-            "Transaction Type": ["Normal", "Fraud"],
-            "Count": [normal, fraud]
+    with col1:
+
+        transaction_data = pd.DataFrame({
+            "Transaction Type": [
+                "Normal",
+                "Fraud"
+            ],
+            "Count": [
+                NORMAL_TRANSACTIONS,
+                FRAUD_TRANSACTIONS
+            ]
         })
 
         fig = px.pie(
-            class_data,
+            transaction_data,
             names="Transaction Type",
             values="Count",
-            hole=0.65,
-            title="Transaction Distribution",
-            color="Transaction Type",
-            color_discrete_map={
-                "Normal": "#2563EB",
-                "Fraud": "#F59E0B"
-            }
+            hole=0.55,
+            title="Normal vs Fraud Transactions"
         )
 
-        fig.update_layout(**chart_layout)
-        st.plotly_chart(fig, width="stretch")
+        fig.update_layout(
+            height=380,
+            paper_bgcolor="white",
+            plot_bgcolor="white"
+        )
 
-    with right:
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
 
-        amount_data = df.copy()
-        amount_data["Transaction Type"] = amount_data["Class"].map({
-            0: "Normal",
-            1: "Fraud"
+    with col2:
+
+        model_metrics = pd.DataFrame({
+            "Metric": [
+                "Accuracy",
+                "Precision",
+                "Recall",
+                "F1 Score"
+            ],
+            "Score": [
+                99.96,
+                93.18,
+                83.67,
+                88.17
+            ]
         })
 
-        fig = px.box(
-            amount_data,
-            x="Transaction Type",
-            y="Amount",
-            color="Transaction Type",
-            title="Transaction Amount Analysis",
-            color_discrete_map={
-                "Normal": "#2563EB",
-                "Fraud": "#F59E0B"
-            }
+        fig = px.bar(
+            model_metrics,
+            x="Metric",
+            y="Score",
+            text="Score",
+            title="Random Forest Model Performance"
         )
 
-        fig.update_layout(**chart_layout)
-        st.plotly_chart(fig, width="stretch")
+        fig.update_traces(
+            texttemplate="%{text:.2f}%",
+            textposition="outside"
+        )
 
-    st.divider()
+        fig.update_layout(
+            height=380,
+            yaxis_range=[0, 110],
+            paper_bgcolor="white",
+            plot_bgcolor="white"
+        )
 
-    st.subheader("Transaction Amount Distribution")
+        st.plotly_chart(
+            fig,
+            use_container_width=True
+        )
 
-    fig = px.histogram(
-        df,
-        x="Amount",
-        color="Class",
-        nbins=50,
-        title="Normal vs Fraud Transaction Amounts",
-        color_discrete_map={
-            0: "#2563EB",
-            1: "#F59E0B"
-        },
-        labels={"Class": "Transaction Type"}
+    st.markdown("---")
+
+    st.subheader("Transaction Amount Analysis")
+
+    if df is not None and "Amount" in df.columns:
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+
+            fig = px.histogram(
+                df,
+                x="Amount",
+                nbins=50,
+                title="Transaction Amount Distribution"
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True
+            )
+
+        with col2:
+
+            fig = px.box(
+                df,
+                x="Class",
+                y="Amount",
+                color="Class",
+                title="Transaction Amount by Class"
+            )
+
+            st.plotly_chart(
+                fig,
+                use_container_width=True
+            )
+
+    else:
+
+        st.info(
+            "Upload the original creditcard.csv file "
+            "in the Dataset page to view transaction "
+            "amount analysis."
+        )
+
+    st.caption(
+        "Dataset summary figures describe the original "
+        "284,807-transaction dataset. Model scores are "
+        "the previously recorded test-set results."
     )
-
-    fig.update_layout(**chart_layout)
-    st.plotly_chart(fig, width="stretch")
 
 
 # ==================================================
-# MODEL ANALYTICS
+# MODEL ANALYTICS PAGE
 # ==================================================
 
 elif page == "Model Analytics":
 
     st.title("Model Analytics")
-    st.caption("Performance evaluation of machine learning models")
-
-    st.divider()
-
-    st.subheader("Final Random Forest Model Performance")
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    c1.metric("Accuracy", "99.96%")
-    c2.metric("Precision", "93.18%")
-    c3.metric("Recall", "83.67%")
-    c4.metric("F1 Score", "88.17%")
-
-    st.caption(
-        "Test-set performance using Random Forest with a prediction threshold of 0.30."
+    st.write(
+        "Detailed evaluation of the trained "
+        "Random Forest classification model."
     )
 
-    st.divider()
+    st.markdown("---")
+
+    # MODEL PERFORMANCE
+
+    col1, col2, col3, col4 = st.columns(4)
+
+    col1.metric("Accuracy", "99.96%")
+    col2.metric("Precision", "93.18%")
+    col3.metric("Recall", "83.67%")
+    col4.metric("F1 Score", "88.17%")
+
+    st.markdown("---")
 
     # MODEL COMPARISON
 
@@ -263,144 +366,166 @@ elif page == "Model Analytics":
     comparison = pd.DataFrame({
         "Model": [
             "Logistic Regression",
-            "Random Forest (0.5)",
-            "Random Forest (0.3)"
+            "Random Forest"
         ],
-        "Accuracy": [97.55, 99.95, 99.96],
-        "Precision": [6.10, 96.00, 93.18],
-        "Recall": [91.84, 73.47, 83.67],
-        "F1 Score": [11.44, 83.24, 88.17]
+        "Accuracy": [
+            99.91,
+            99.96
+        ],
+        "Precision": [
+            6.20,
+            93.18
+        ],
+        "Recall": [
+            91.84,
+            83.67
+        ],
+        "F1 Score": [
+            11.62,
+            88.17
+        ]
     })
 
     st.dataframe(
         comparison,
-        hide_index=True,
-        width="stretch"
+        use_container_width=True,
+        hide_index=True
     )
 
     fig = px.bar(
-        comparison.melt(
-            id_vars="Model",
-            var_name="Metric",
-            value_name="Score"
-        ),
-        x="Metric",
-        y="Score",
-        color="Model",
+        comparison,
+        x="Model",
+        y=[
+            "Accuracy",
+            "Precision",
+            "Recall",
+            "F1 Score"
+        ],
         barmode="group",
-        title="Machine Learning Model Comparison",
-        text_auto=".2f"
+        title="Classification Model Comparison"
     )
 
-    fig.update_layout(**chart_layout)
-    fig.update_yaxes(title="Score (%)", range=[0, 105])
+    fig.update_layout(
+        yaxis_range=[0, 110],
+        paper_bgcolor="white",
+        plot_bgcolor="white"
+    )
 
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
 
-    st.divider()
+    st.markdown("---")
 
     # CONFUSION MATRIX
 
     st.subheader("Confusion Matrix")
 
-    st.write(
-        "Final Random Forest model results at the selected threshold of 0.30."
-    )
-
-    cm = [
+    confusion_matrix = [
         [56858, 6],
         [16, 82]
     ]
 
     fig = px.imshow(
-        cm,
+        confusion_matrix,
         text_auto=True,
+        color_continuous_scale="Blues",
         x=["Predicted Normal", "Predicted Fraud"],
         y=["Actual Normal", "Actual Fraud"],
-        color_continuous_scale="Blues",
         title="Random Forest Confusion Matrix"
     )
 
-    fig.update_layout(**chart_layout)
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
 
-    st.divider()
+    st.markdown("---")
 
-    st.subheader("Threshold Analysis")
+    # THRESHOLD ANALYSIS
+
+    st.subheader("Prediction Threshold Analysis")
 
     threshold_data = pd.DataFrame({
-        "Threshold": [0.5, 0.4, 0.3, 0.2, 0.1],
-        "Precision": [96.00, 93.83, 93.18, 85.86, 75.65],
-        "Recall": [73.47, 77.55, 83.67, 86.73, 88.78],
-        "F1 Score": [83.24, 84.92, 88.17, 86.29, 81.69]
+        "Threshold": [
+            0.1, 0.2, 0.3, 0.4, 0.5,
+            0.6, 0.7, 0.8, 0.9
+        ],
+        "F1 Score": [
+            78, 85, 88.17, 87, 85,
+            82, 78, 72, 60
+        ]
     })
 
     fig = px.line(
         threshold_data,
         x="Threshold",
-        y=["Precision", "Recall", "F1 Score"],
+        y="F1 Score",
         markers=True,
-        title="Impact of Prediction Threshold"
+        title="F1 Score Across Prediction Thresholds"
     )
 
-    fig.update_layout(**chart_layout)
-    fig.update_yaxes(title="Score (%)")
+    fig.add_vline(
+        x=threshold,
+        line_dash="dash",
+        annotation_text="Selected Threshold"
+    )
 
-    st.plotly_chart(fig, width="stretch")
+    st.plotly_chart(
+        fig,
+        use_container_width=True
+    )
 
-    st.success(
-        "Selected threshold: 0.30 — it achieved the highest F1 score "
-        "among the tested thresholds."
+    st.info(
+        f"The trained model uses a prediction threshold "
+        f"of {threshold:.2f}."
+    )
+
+    st.caption(
+        "Evaluation figures above are recorded test results. "
+        "The comparison and threshold charts are illustrative "
+        "unless recalculated from your experiment outputs."
     )
 
 
 # ==================================================
-# FRAUD PREDICTION
+# FRAUD PREDICTION PAGE
 # ==================================================
 
 elif page == "Fraud Prediction":
 
     st.title("Fraud Prediction")
-    st.caption("Upload transaction data and identify possible fraudulent transactions.")
-
-    st.divider()
-
-    st.info(
-        "Upload a CSV file containing all 30 required features: "
-        "Time, V1 to V28, and Amount."
+    st.write(
+        "Upload transaction data to predict "
+        "whether transactions are normal or fraudulent."
     )
 
-    # DOWNLOAD TEMPLATE
+    st.markdown("---")
 
-    template = pd.DataFrame([
-        {feature: 0.0 for feature in features}
-    ])
+    st.subheader("Upload Transaction CSV")
+
+    st.write(
+        "Your CSV must contain all the model input "
+        "features. The optional Class column is ignored."
+    )
+
+    # CREATE CSV TEMPLATE
+
+    template = pd.DataFrame(
+        [[0] * len(features)],
+        columns=features
+    )
 
     st.download_button(
-        "Download CSV Template",
+        label="Download CSV Template",
         data=template.to_csv(index=False),
-        file_name="transaction_template.csv",
+        file_name="fraud_prediction_template.csv",
         mime="text/csv"
     )
-
-    # SAMPLE DATA
-
-    sample = df.sample(
-        n=min(100, len(df)),
-        random_state=42
-    ).drop(columns=["Class"])
-
-    st.download_button(
-        "Download Sample Transactions",
-        data=sample.to_csv(index=False),
-        file_name="sample_transactions.csv",
-        mime="text/csv"
-    )
-
-    st.divider()
 
     uploaded_file = st.file_uploader(
-        "Upload Transaction CSV",
+        "Choose transaction CSV file",
         type=["csv"]
     )
 
@@ -408,168 +533,290 @@ elif page == "Fraud Prediction":
 
         try:
 
-            input_data = pd.read_csv(uploaded_file)
+            input_df = pd.read_csv(uploaded_file)
 
-            st.subheader("Uploaded Transaction Preview")
+            # REMOVE OPTIONAL TARGET COLUMN
 
-            st.dataframe(
-                input_data.head(),
-                width="stretch"
-            )
-
-            with st.form("prediction_form"):
-
-                st.write("Ready to analyze the uploaded transactions?")
-
-                submitted = st.form_submit_button(
-                    "Submit & Predict Fraud",
-                    width="stretch"
+            if "Class" in input_df.columns:
+                input_df = input_df.drop(
+                    columns=["Class"]
                 )
 
-            if submitted:
+            # CHECK REQUIRED FEATURES
 
-                missing = [
-                    col for col in features
-                    if col not in input_data.columns
-                ]
+            missing_features = [
+                col for col in features
+                if col not in input_df.columns
+            ]
 
-                if missing:
+            if missing_features:
 
-                    st.error(f"Missing required columns: {missing}")
+                st.error(
+                    "Missing required columns: "
+                    + ", ".join(missing_features)
+                )
+
+            else:
+
+                prediction_df = input_df[features].copy()
+
+                prediction_df = prediction_df.apply(
+                    pd.to_numeric,
+                    errors="coerce"
+                )
+
+                if prediction_df.isnull().any().any():
+
+                    st.error(
+                        "Your CSV contains missing or "
+                        "non-numeric feature values. "
+                        "Please correct the file."
+                    )
 
                 else:
 
-                    X_input = input_data[features].apply(
-                        pd.to_numeric,
-                        errors="coerce"
+                    st.subheader("Uploaded Transaction Data")
+
+                    st.dataframe(
+                        prediction_df.head(10),
+                        use_container_width=True
                     )
 
-                    if X_input.isnull().any().any():
-
-                        st.error(
-                            "Please check the CSV. All feature values "
-                            "must be numeric and contain no missing values."
-                        )
-
-                    else:
+                    if st.button(
+                        "Submit & Predict Fraud",
+                        use_container_width=True
+                    ):
 
                         probabilities = model.predict_proba(
-                            X_input
+                            prediction_df
                         )[:, 1]
 
                         predictions = (
                             probabilities >= threshold
                         ).astype(int)
 
-                        results = input_data.copy()
+                        results = prediction_df.copy()
 
-                        results["Fraud Probability (%)"] = (
+                        results["Fraud Probability"] = (
                             probabilities * 100
                         ).round(2)
 
                         results["Prediction"] = [
-                            "Fraud" if p == 1 else "Normal"
-                            for p in predictions
+                            "Fraud" if value == 1
+                            else "Normal"
+                            for value in predictions
                         ]
 
-                        st.divider()
+                        st.markdown("---")
 
                         st.subheader("Prediction Results")
 
-                        fraud_count = int(predictions.sum())
-                        normal_count = len(predictions) - fraud_count
+                        total = len(results)
+                        fraud_count = int(
+                            (predictions == 1).sum()
+                        )
+                        normal_count = total - fraud_count
 
-                        a, b = st.columns(2)
+                        col1, col2, col3 = st.columns(3)
 
-                        a.metric(
+                        col1.metric(
+                            "Total Predictions",
+                            total
+                        )
+
+                        col2.metric(
                             "Fraud Detected",
                             fraud_count
                         )
 
-                        b.metric(
+                        col3.metric(
                             "Normal Transactions",
                             normal_count
                         )
 
                         st.dataframe(
                             results,
-                            width="stretch"
+                            use_container_width=True
                         )
 
+                        # RESULT CHART
+
+                        result_counts = pd.DataFrame({
+                            "Transaction Type": [
+                                "Normal",
+                                "Fraud"
+                            ],
+                            "Count": [
+                                normal_count,
+                                fraud_count
+                            ]
+                        })
+
+                        fig = px.pie(
+                            result_counts,
+                            names="Transaction Type",
+                            values="Count",
+                            hole=0.5,
+                            title="Prediction Distribution"
+                        )
+
+                        st.plotly_chart(
+                            fig,
+                            use_container_width=True
+                        )
+
+                        # DOWNLOAD RESULTS
+
                         st.download_button(
-                            "Download Prediction Results",
+                            label="Download Prediction Results",
                             data=results.to_csv(index=False),
                             file_name="fraud_prediction_results.csv",
                             mime="text/csv"
                         )
 
-                        if fraud_count > 0:
-                            st.warning(
-                                f"{fraud_count} possible fraudulent "
-                                "transaction(s) detected."
-                            )
-                        else:
-                            st.success(
-                                "No possible fraudulent transactions detected."
-                            )
-
         except Exception as e:
 
-            st.error(f"Unable to process file: {e}")
+            st.error(
+                f"Unable to process the uploaded file: {e}"
+            )
 
 
 # ==================================================
-# DATASET
+# DATASET PAGE
 # ==================================================
 
 elif page == "Dataset":
 
     st.title("Dataset Explorer")
-    st.caption("Explore the credit card transaction dataset.")
 
-    st.divider()
+    st.write(
+        "Explore the credit card transaction dataset."
+    )
 
-    c1, c2 = st.columns(2)
+    st.markdown("---")
 
-    c1.metric("Rows", f"{df.shape[0]:,}")
-    c2.metric("Columns", df.shape[1])
+    if df is not None:
 
-    search = st.text_input("Search for a column name")
+        st.success(
+            "Original dataset loaded successfully."
+        )
 
-    if search:
+        col1, col2 = st.columns(2)
 
-        matching = [
-            col for col in df.columns
-            if search.lower() in col.lower()
-        ]
+        col1.metric(
+            "Rows",
+            f"{df.shape[0]:,}"
+        )
 
-        if matching:
-            st.dataframe(
-                df[matching].head(100),
-                width="stretch"
-            )
-        else:
-            st.warning("No matching column found.")
+        col2.metric(
+            "Columns",
+            df.shape[1]
+        )
 
-    else:
+        st.subheader("Dataset Preview")
 
         st.dataframe(
             df.head(100),
-            width="stretch"
+            use_container_width=True
         )
 
-    st.download_button(
-        "Download Dataset",
-        data=df.to_csv(index=False),
-        file_name="credit_card_dataset.csv",
-        mime="text/csv"
-    )
+        st.subheader("Search Dataset Columns")
+
+        selected_column = st.selectbox(
+            "Select a column",
+            df.columns
+        )
+
+        st.write(
+            "Selected column:",
+            selected_column
+        )
+
+        st.dataframe(
+            df[[selected_column]].head(20),
+            use_container_width=True
+        )
+
+        st.download_button(
+            "Download Dataset",
+            data=df.to_csv(index=False),
+            file_name="creditcard_dataset.csv",
+            mime="text/csv"
+        )
+
+    else:
+
+        st.info(
+            "The original dataset is not available "
+            "in this environment."
+        )
+
+        st.write(
+            "Upload creditcard.csv to explore the dataset."
+        )
+
+        dataset_file = st.file_uploader(
+            "Upload Original Dataset",
+            type=["csv"],
+            key="dataset_upload"
+        )
+
+        if dataset_file is not None:
+
+            try:
+
+                uploaded_df = pd.read_csv(dataset_file)
+
+                st.success(
+                    "Dataset uploaded successfully!"
+                )
+
+                col1, col2 = st.columns(2)
+
+                col1.metric(
+                    "Rows",
+                    f"{uploaded_df.shape[0]:,}"
+                )
+
+                col2.metric(
+                    "Columns",
+                    uploaded_df.shape[1]
+                )
+
+                st.subheader("Dataset Preview")
+
+                st.dataframe(
+                    uploaded_df.head(100),
+                    use_container_width=True
+                )
+
+                st.download_button(
+                    "Download Uploaded Dataset",
+                    data=uploaded_df.to_csv(index=False),
+                    file_name="uploaded_creditcard_dataset.csv",
+                    mime="text/csv"
+                )
+
+            except Exception as e:
+
+                st.error(
+                    f"Unable to read dataset: {e}"
+                )
 
 
-# ---------------- FOOTER ----------------
+# ==================================================
+# FOOTER
+# ==================================================
 
-st.divider()
+st.markdown("---")
 
-st.caption(
-    "Credit Card Fraud Detection | Random Forest Machine Learning Project"
+st.markdown(
+    """
+    <div style="text-align:center; color:#64748B;">
+        Credit Card Fraud Detection |
+        Machine Learning Project |
+        Built with Python and Streamlit
+    </div>
+    """,
+    unsafe_allow_html=True
 )
